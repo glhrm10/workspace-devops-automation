@@ -7,7 +7,8 @@ WORKDIR /app
 
 # Copia apenas os arquivos de configuração do Maven primeiro (para cache)
 COPY pom.xml .
-COPY .mvnw
+COPY .mvn .mvn
+COPY mvnw .
 
 # Baixa as dependências (esta camada será cacheada)
 RUN chmod +x mvnw

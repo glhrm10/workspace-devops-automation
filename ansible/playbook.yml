@@ -11,6 +11,9 @@
           - curl
           - gnupg
           - lsb-release
+          - software-properties-common
+          - add-apt-repository ppa:deadsnakes/ppa
+          - python3.11
         state: present
         update_cache: true
 

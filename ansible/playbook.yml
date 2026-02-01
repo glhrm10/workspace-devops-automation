@@ -8,18 +8,13 @@
     - name: Preparar ambiente e instalar Python 3.9
       raw: |
         export DEBIAN_FRONTEND=noninteractive
-        sudo apt-get update
+        sudo fuser -vki /var/lib/dpkg/lock-frontend || true
+        sudo apt-get update && \
         sudo apt-get install -y python3.9 python3.9-distutils
       changed_when: false
 
-    - name: Coletar fatos com o novo interpretador
-      setup:
-      vars:
-        ansible_python_interpreter: /usr/bin/python3.9
-
-    - name: Coletar fatos com o novo interpretador
-      setup:
-        executable: /usr/bin/python3.9
+    - name: Coletar fatos do sistema
+      setup: # Removido qualquer parâmetro interno para evitar o erro de "Unsupported parameters"
 
   tasks:
     - name: Instalar dependências do sistema

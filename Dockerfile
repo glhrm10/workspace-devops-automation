@@ -1,12 +1,11 @@
 # Multi-stage build para otimizar o tamanho da imagem
 
 # Estágio 1: Build da aplicação
-FROM eclipse-temurin:17-jre-alpine
+FROM maven:3.9-eclipse-temurin-17-alpine AS builder
 
 WORKDIR /app
 
 # Copia apenas os arquivos de configuração do Maven primeiro (para cache)
-COPY target/*.jar app.jar
 COPY pom.xml .
 COPY .mvn .mvn
 COPY mvnw .
@@ -44,4 +43,4 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=40s --retries=3 \
   CMD wget --no-verbose --tries=1 --spider http://localhost:8080/actuator/health || exit 1
 
 # Executa a aplicação
-ENTRYPOINT ["java", "-jar", "app.jar"]
+ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -jar app.jar"]

@@ -1,7 +1,7 @@
 # Multi-stage build para otimizar o tamanho da imagem
 
 # Estágio 1: Build da aplicação
-FROM maven:3.9-eclipse-temurin-21-alpine AS builder
+FROM eclipse-temurin:17-jre-alpine
 
 WORKDIR /app
 

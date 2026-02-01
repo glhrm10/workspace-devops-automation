@@ -17,12 +17,10 @@
 
   tasks:
     - name: Instalar dependências do sistema
-      # Usamos shell aqui para evitar dependência do módulo python-apt do Ansible
       shell: |
+        export DEBIAN_FRONTEND=noninteractive
         apt-get update && \
         apt-get install -y apt-transport-https ca-certificates curl gnupg lsb-release software-properties-common
-      args:
-        warn: false
 
     - name: Adicionar chave GPG oficial do Docker
       shell: |

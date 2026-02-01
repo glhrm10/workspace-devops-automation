@@ -2,8 +2,23 @@
 - name: Instalar Docker no Ubuntu
   hosts: vm
   become: true
+  gather_facts: false  # Importante: Desliga a coleta automática para não quebrar no Python 3.8
+
+  pre_tasks:
+    - name: Garantir que o Python 3.11 está instalado (via Shell)
+      raw: |
+        sudo apt-get update && \
+        sudo apt-get install -y software-properties-common && \
+        sudo add-apt-repository -y ppa:deadsnakes/ppa && \
+        sudo apt-get install -y python3.11 python3.11-distutils
+      changed_when: false
+
+    - name: Coletar fatos agora que o Python está atualizado
+      setup:
+        executable: /usr/bin/python3.11
+
   tasks:
-    - name: Instalar dependências
+    - name: Instalar dependências do sistema
       apt:
         name:
           - apt-transport-https
@@ -11,9 +26,6 @@
           - curl
           - gnupg
           - lsb-release
-          - software-properties-common
-          - add-apt-repository ppa:deadsnakes/ppa
-          - python3.11
         state: present
         update_cache: true
 
@@ -24,18 +36,22 @@
 
     - name: Adicionar repositório do Docker
       apt_repository:
-        repo: deb [arch=amd64] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable
+        repo: "deb [arch=amd64] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable"
         state: present
 
-    - name: Atualizar cache do apt e instalar Docker
+    - name: Instalar Docker Engine
       apt:
-        name: docker-ce
+        name: 
+          - docker-ce
+          - docker-ce-cli
+          - containerd.io
+          - python3-docker # Necessário para o módulo docker_container funcionar
         state: present
         update_cache: true
 
     - name: Adicionar usuário ao grupo Docker
       user:
-        name: "{{ ansible_user }}"
+        name: "{{ ansible_user | default(ansible_ssh_user) }}"
         groups: docker
         append: true
 
@@ -44,12 +60,13 @@
         name: docker
         state: started
         enabled: true
-        
+
     - name: Executar container da aplicação Java
       docker_container:
         name: java-api
         image: iesodias/java-api:latest
         state: started
+        pull: true # Garante que vai baixar a imagem nova do registry
         restart_policy: always
         published_ports:
           - "8081:8081"

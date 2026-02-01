@@ -2,18 +2,20 @@
 - name: Instalar Docker no Ubuntu
   hosts: vm
   become: true
-  gather_facts: false  # Desativado para evitar erro de versão do Python no início
+  gather_facts: false 
 
   pre_tasks:
     - name: Preparar ambiente e instalar Python 3.9
       raw: |
         export DEBIAN_FRONTEND=noninteractive
-        sudo fuser -vki /var/lib/dpkg/lock-frontend || true
-        sudo fuser -vki /var/lib/apt/lists/lock || true
-        sudo apt-get clean
         sudo apt-get update
         sudo apt-get install -y python3.9 python3.9-distutils
       changed_when: false
+
+    - name: Coletar fatos com o novo interpretador
+      setup:
+      vars:
+        ansible_python_interpreter: /usr/bin/python3.9
 
     - name: Coletar fatos com o novo interpretador
       setup:

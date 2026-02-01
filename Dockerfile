@@ -1,21 +1,18 @@
 # Multi-stage build para otimizar o tamanho da imagem
 
 # Estágio 1: Build da aplicação
-FROM eclipse-temurin:17-jre-alpine
+FROM maven:3.9-eclipse-temurin-17-alpine AS builder
 
 WORKDIR /app
 
 # Copia apenas os arquivos de configuração do Maven primeiro (para cache)
 COPY pom.xml .
+COPY .mvn .mvn
 COPY mvnw .
-COPY mvnw . mvnw .
 COPY mvnw.cmd .
 
 # Baixa as dependências (esta camada será cacheada)
-RUN chmod +x mvnw 
-RUN ./mvnw dependency:go-offline -B
-
-
+RUN chmod +x mvnw && ./mvnw dependency:go-offline -B
 
 # Copia o código fonte
 COPY src ./src

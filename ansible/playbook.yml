@@ -2,32 +2,22 @@
 - name: Instalar Docker no Ubuntu
   hosts: vm
   become: true
-  gather_facts: false  # Importante: Desliga a coleta automática para não quebrar no Python 3.8
+  gather_facts: false  # Desativado para evitar erro de versão do Python no início
 
   pre_tasks:
-    - name: Garantir que o Python 3.11 está instalado (via Shell)
+    - name: Preparar ambiente e instalar Python 3.9
       raw: |
         export DEBIAN_FRONTEND=noninteractive
-        # Mata processos que estejam segurando o lock do apt, se existirem
         sudo fuser -vki /var/lib/dpkg/lock-frontend || true
         sudo fuser -vki /var/lib/apt/lists/lock || true
-        sudo dpkg --configure -a
-
-        # Tenta limpar o cache e atualizar
         sudo apt-get clean
-        sudo apt-get update -y
-
-        # Instala dependências básicas e o Python 3.11
-        
-        sudo apt-get install -y software-properties-common
-        sudo add-apt-repository -y ppa:deadsnakes/ppa
-        sudo apt-get update -y
-        sudo apt-get install -y python3.11 python3.11-distutils
+        sudo apt-get update
+        sudo apt-get install -y python3.9 python3.9-distutils
       changed_when: false
 
-    - name: Coletar fatos agora que o Python está atualizado
+    - name: Coletar fatos com o novo interpretador
       setup:
-        executable: /usr/bin/python3.11
+        executable: /usr/bin/python3.9
 
   tasks:
     - name: Instalar dependências do sistema
@@ -38,6 +28,7 @@
           - curl
           - gnupg
           - lsb-release
+          - software-properties-common
         state: present
         update_cache: true
 
@@ -51,23 +42,28 @@
         repo: "deb [arch=amd64] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable"
         state: present
 
-    - name: Instalar Docker Engine
+    - name: Instalar Docker e Pip
       apt:
-        name: 
+        name:
           - docker-ce
           - docker-ce-cli
           - containerd.io
-          - python3-docker # Necessário para o módulo docker_container funcionar
+          - python3-pip
         state: present
         update_cache: true
 
+    - name: Instalar SDK do Docker para Python
+      pip:
+        name: docker
+        executable: pip3
+
     - name: Adicionar usuário ao grupo Docker
       user:
-        name: "{{ ansible_user | default(ansible_ssh_user) }}"
+        name: "{{ ansible_user | default('azureuser') }}"
         groups: docker
         append: true
 
-    - name: Iniciar e habilitar serviço Docker
+    - name: Garantir que o Docker está rodando
       systemd:
         name: docker
         state: started
@@ -78,7 +74,7 @@
         name: java-api
         image: iesodias/java-api:latest
         state: started
-        pull: true # Garante que vai baixar a imagem nova do registry
+        pull: true
         restart_policy: always
         published_ports:
           - "8081:8081"

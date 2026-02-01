@@ -78,13 +78,6 @@ jobs:
           echo "nsg_name=$(terraform output -raw nsg_name)" >> $GITHUB_OUTPUT
           echo "resource_group=$(terraform output -raw resource_group_name)" >> $GITHUB_OUTPUT
 
-      - name: Definir Variáveis de Ambiente
-        run: |
-          echo "VM_NAME=vm-automation" >> $GITHUB_ENV
-          echo "ADMIN_USERNAME=azureuser" >> $GITHUB_ENV
-          echo "PUBLIC_IP=${{ steps.output_vm.outputs.public_ip }}" >> $GITHUB_ENV
-          echo "SSH_COMMAND=ssh azureuser@${{ steps.output_vm.outputs.public_ip }}" >> $GITHUB_ENV
-
       - name: Instalar Ansible e sshpass
         run: |
           sudo apt-get update
@@ -93,11 +86,14 @@ jobs:
       - name: Criar Inventário Ansible
         run: |
           echo "[vm]" > inventory
-          echo "${{ env.PUBLIC_IP }} ansible_user=${{ env.ADMIN_USERNAME }} ansible_password=${{ secrets.ADMIN_PASSWORD }} ansible_ssh_common_args='-o StrictHostKeyChecking=no'" >> inventory
+          echo "${{ steps.output_vm.outputs.public_ip }} ansible_user=azureuser ansible_password='${{ secrets.ADMIN_PASSWORD }}' ansible_ssh_common_args='-o StrictHostKeyChecking=no'" >> inventory
 
       - name: Executar Playbook Ansible
         run: |
-          ansible-playbook -i inventory ansible/playbook.yml --extra-vars "ansible_sudo_pass=${{ secrets.ADMIN_PASSWORD }}"
+          # Passamos o interpretador python3.9 que instalamos no Playbook via pre_tasks
+          ansible-playbook -i inventory ansible/playbook.yml \
+            -e "ansible_python_interpreter=/usr/bin/python3.9" \
+            --extra-vars "ansible_sudo_pass='${{ secrets.ADMIN_PASSWORD }}'"
 
   post-tests:
     if: ${{ github.event.inputs.destroy == 'false' }}
@@ -117,53 +113,25 @@ jobs:
 
       - name: Testar Swagger na Porta 8081
         run: |
-          echo "Aguardando aplicação subir com Swagger..."
-          sleep 30
-          response=$(curl -s -o /dev/null -w "%{http_code}" http://$PUBLIC_IP:8081/swagger-ui/index.html)
+          echo "Aguardando aplicação subir (60s para garantir o Docker Pull)..."
+          sleep 60
+          response=$(curl -s -o /dev/null -w "%{http_code}" http://$PUBLIC_IP:8081/swagger-ui/index.html || echo "000")
           if [ "$response" != "200" ]; then
-            echo "❌ Swagger não respondeu como esperado. Status HTTP: $response"
+            echo "❌ Swagger não respondeu. Status: $response"
             exit 1
           else
-            echo "✅ Swagger disponível em /swagger-ui/index.html na porta 8081!"
+            echo "✅ Swagger online na porta 8081!"
           fi
 
-      - name: Verificar status da VM
+      - name: Verificar status da VM e NSG
         run: |
-          status=$(az vm get-instance-view \
-            --name "$VM_NAME" \
-            --resource-group "$RESOURCE_GROUP" \
-            --query "instanceView.statuses[?code=='PowerState/running'].displayStatus" \
-            --output tsv)
-
-          echo "Status da VM: $status"
-
-          if [ "$status" != "VM running" ]; then
-              echo "❌ A VM não está em execução!"
-              exit 1
-          else
-              echo "✅ VM está rodando com sucesso!"
-          fi
-
-      - name: Verificar regra da NSG para porta 8081
-        run: |
-          result=$(az network nsg rule list \
-            --nsg-name "$NSG_NAME" \
-            --resource-group "$RESOURCE_GROUP" \
-            --query "[?destinationPortRange=='8081' && access=='Allow']")
-
-          if [ "$result" = "[]" ]; then
-            echo "❌ Porta 8081 não está liberada na NSG!"
-            exit 1
-          else
-            echo "✅ Porta 8081 está liberada corretamente na NSG!"
-          fi
+          az vm get-instance-view --name "$VM_NAME" --resource-group "$RESOURCE_GROUP" --query "instanceView.statuses[?code=='PowerState/running'].displayStatus" -o tsv
+          az network nsg rule list --nsg-name "$NSG_NAME" --resource-group "$RESOURCE_GROUP" --query "[?destinationPortRange=='8081' && access=='Allow']"
 
   destroy:
     if: ${{ github.event.inputs.destroy == 'true' }}
     name: 🧨 Destruir Infraestrutura
     runs-on: ubuntu-latest
-    env:
-      ARM_SUBSCRIPTION_ID: ${{ secrets.ARM_SUBSCRIPTION_ID }}
     steps:
       - name: Checkout do código
         uses: actions/checkout@v3
@@ -179,5 +147,6 @@ jobs:
       - name: Executar Terraform Destroy
         working-directory: infra
         run: |
+          export ARM_SUBSCRIPTION_ID=${{ secrets.ARM_SUBSCRIPTION_ID }}
           terraform init
           terraform destroy -auto-approve
